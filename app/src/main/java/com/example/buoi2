@@ -1,0 +1,160 @@
+package com.example.buoi2
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+// ---------- 1. Model dữ liệu giao dịch ----------
+data class TransactionItem(
+    val id: Int,
+    val category: String,
+    val note: String,
+    val amount: Long,
+    val date: String,
+    val isIncome: Boolean = false
+)
+
+// ---------- 2. Các hàm tiện ích ----------
+fun formatMoney(value: Long): String {
+    return "%,d".format(value).replace(',', '.') + " đ"
+}
+
+fun categoryEmoji(category: String): String = when (category) {
+    "Ăn uống" -> "🍴"
+    "Di chuyển" -> "🚌"
+    "Mua sắm" -> "🛍️"
+    "Lương" -> "💰"
+    else -> "📌"
+}
+
+// ---------- 3. Màn hình thêm giao dịch ----------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddTransactionScreen(
+    db: DatabaseHelper,
+    onSaved: () -> Unit,
+    onBack: () -> Unit
+) {
+    val categories = listOf("Ăn uống", "Di chuyển", "Mua sắm", "Lương", "Khác")
+
+    var isIncome by remember { mutableStateOf(false) }
+    var category by remember { mutableStateOf(categories[0]) }
+    var amountText by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
+    var date by remember {
+        mutableStateOf(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()))
+    }
+    var error by remember { mutableStateOf("") }
+
+    Scaffold(containerColor = Color(0xFFF5F7FB)) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TextButton(onClick = onBack) { Text("← Quay lại") }
+
+            Text(
+                text = "Thêm giao dịch",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E293B)
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !isIncome,
+                    onClick = { isIncome = false },
+                    label = { Text("Chi tiêu") }
+                )
+                FilterChip(
+                    selected = isIncome,
+                    onClick = { isIncome = true },
+                    label = { Text("Thu nhập") }
+                )
+            }
+
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                categories.forEach { c ->
+                    FilterChip(
+                        selected = category == c,
+                        onClick = { category = c },
+                        label = { Text(categoryEmoji(c) + " " + c) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = amountText,
+                onValueChange = { amountText = it.filter { ch -> ch.isDigit() } },
+                label = { Text("Số tiền (đ)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it },
+                label = { Text("Ghi chú") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = date,
+                onValueChange = { date = it },
+                label = { Text("Ngày (dd/MM/yyyy)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (error.isNotEmpty()) {
+                Text(error, color = Color(0xFFDC2626), fontSize = 13.sp)
+            }
+
+            Button(
+                onClick = {
+                    val amount = amountText.toLongOrNull() ?: 0L
+                    if (amount <= 0L) {
+                        error = "Vui lòng nhập số tiền lớn hơn 0"
+                    } else if (date.isBlank()) {
+                        error = "Vui lòng nhập ngày"
+                    } else {
+                        db.insert(
+                            TransactionItem(
+                                id = 0, // SQLite tự sinh id
+                                category = category,
+                                note = note,
+                                amount = amount,
+                                date = date,
+                                isIncome = isIncome
+                            )
+                        )
+                        onSaved()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+            ) {
+                Text("Lưu")
+            }
+        }
+    }
+}
